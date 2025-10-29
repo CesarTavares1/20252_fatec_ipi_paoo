@@ -24,7 +24,7 @@ app.post('/lembretes/:id/observacoes', (req, res) => {
   const idObs = uuidv4()
   const { texto } = req.body
   const { id: lembreteId } = req.params
-  const observacao = {id: idObs, texto, lembreteId}
+  const observacao = {id: idObs, texto, lembreteId, status: 'aguardando'}
   const observacoesDoLembrete = observacoesPorLembrete[lembreteId] || []
   observacoesDoLembrete.push({observacao})
   observacoesPorLembrete[lembreteId] = observacoesDoLembrete

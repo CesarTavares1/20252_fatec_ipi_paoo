@@ -49,6 +49,8 @@ app.post('/eventos', (req, res) => {
     // const type = evento.type
     // const payload = evento.payload
     const { type, payload } = evento
+    console.log(`type: ${type}`)
+    console.log(`payload: ${payload}`)
     //acessar o mapa de funções na posição type e chamar a função resultante entregando a ela, como parametro, o payload
     funcoes[type](payload)
   }
