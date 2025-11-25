@@ -35,7 +35,10 @@ const funcoes = {
     const observacoes = baseConsolidada[observacao.lembreteId]['observacoes']
     const indice = observacoes.findIndex(o => o.id === observacao.id)
     observacoes[indice] = observacao
-  }
+  },
+  LembreteClassificado: (lembrete) => {
+  baseConsolidada[lembrete.id] = lembrete
+}
 }
 
 //disponibiliza a base consolidada
@@ -62,14 +65,17 @@ app.post('/eventos', (req, res) => {
 })
 
 const port = 6000
-app.listen(port, async () => { 
-  console.log (`Consulta. Porta ${port}.`)
-  const resp = await axios.get('http://localhost:10000/eventos')
-  //iterar sobre o corpo da resposta, pegando cada evento, e fazendo seu tratamento usando o mapa de funções
-  for (let evento of resp.data){
-      try{
+app.listen(port, async () => {
+  console.log(`Consulta. Porta ${port}.`)
+  try {
+    const resp = await axios.get('http://localhost:10000/eventos')
+    for (let evento of resp.data) {
+      try {
         funcoes[evento.type](evento.payload)
-      }
-      catch(e){}
+      } catch(e){}
+    }
+  } catch(e) {
+    console.log('Erro ao recuperar eventos.', e.message)
   }
 })
+
