@@ -53,11 +53,20 @@ app.listen(port, async () => {
 
   try {
     const resposta = await axios.get('http://localhost:10000/eventos');
-    resposta.data.forEach((evento) =>
-      processarEvento(evento.type, evento.payload)
-    );
+    const eventos = resposta.data;
+    for (const tipo in eventos) {
+      for (const evento of eventos[tipo]) {
+        processarEvento(evento.type, evento.payload);
+      }
+    }
     console.log('Eventos recuperados com sucesso!');
   } catch (err) {
     console.log('Não foi possível recuperar eventos antigos.');
   }
 });
+
+axios.post('http://localhost:10000/registrar', {
+  nome: 'estatisticas',
+  eventosInteresse: ['LembreteCriado', 'LembreteClassificado', 'ObservacaoCriada']
+});
+

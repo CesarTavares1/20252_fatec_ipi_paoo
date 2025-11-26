@@ -1,55 +1,63 @@
-//fazer os imports
-import express from 'express'
-import axios from 'axios'
-const app = express()
-//aplicar eventuais middlewares
-app.use(express.json())
-const palavraChave = 'importante'
+import express from 'express';
+import axios from 'axios';
+
+const app = express();
+app.use(express.json());
+
+const palavraChave = 'importante';
+
 const funcoes = {
-  ObservacaoCriada: (observacao) => {
-    //trocar o status da observação. se contiver a palavra importante, o status fica sendo importante, caso contrario, fica sendo comum
-    if(observacao.texto.includes(palavraChave))
-      observacao.status = 'importante'
-    else
-      observacao.status = 'comum'
-    axios.post('http://localhost:10000/eventos', {
+  ObservacaoCriada: async (observacao) => {
+    const textoLower = observacao.texto.toLowerCase();
+
+    if (textoLower.includes(palavraChave)) {
+      observacao.status = 'importante';
+    } else {
+      observacao.status = 'comum';
+    }
+
+    await axios.post('http://localhost:10000/eventos', {
       type: 'ObservacaoClassificada',
       payload: observacao
-    })
+    }).catch(() => {});
   },
-  LembreteCriado: (lembrete) => {
-  if (lembrete.texto.length >= 50)
-    lembrete.status = 'importante'
-  else
-    lembrete.status = 'comum'
 
-  axios.post('http://localhost:10000/eventos', {
-    type: 'LembreteClassificado',
-    payload: lembrete
-  })
-}
-}
-
-app.post('/eventos', (req, res) => {
-  try{
-    const evento = req.body
-    console.log(evento)
-    funcoes[evento.type](evento.payload)
-  }
-  catch(e){}
-  res.end()
-})
-
-//colocar o mss para funcionar na porta 7000
-const port = 7000
-app.listen(port, () => {
-  console.log(`Classificação. Porta ${port}.`)
-  axios.get('http://localhost:10000/eventos').then(({data: eventos}) => {
-    for(let evento of eventos){
-      try{
-        funcoes[evento.type](evento.payload)
-      }
-      catch(e){}
+  LembreteCriado: async (lembrete) => {
+    if (lembrete.texto.length >= 50) {
+      lembrete.status = 'importante';
+    } else {
+      lembrete.status = 'comum';
     }
-  })
-})
+
+    await axios.post('http://localhost:10000/eventos', {
+      type: 'LembreteClassificado',
+      payload: lembrete
+    }).catch(() => {});
+  }
+};
+
+app.post('/eventos', async (req, res) => {
+  const evento = req.body;
+  console.log('Evento recebido na Classificação:', evento);
+
+  try {
+    const funcao = funcoes[evento.type];
+    if (funcao) {
+      await funcao(evento.payload);
+    }
+  } catch (e) {
+    console.log('Erro ao processar evento:', e.message);
+  }
+
+  res.end();
+});
+
+const port = 7000;
+app.listen(port, async () => {
+  console.log(`Classificação. Porta ${port}.`);
+
+  await axios.post('http://localhost:10000/registrar', {
+    nome: 'classificacao',
+    eventosInteresse: ['ObservacaoCriada', 'LembreteCriado']
+  }).catch(() => {});
+});

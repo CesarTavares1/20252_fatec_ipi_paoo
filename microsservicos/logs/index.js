@@ -30,11 +30,19 @@ const port = 8000;
 app.listen(port, async () => {
   console.log(`Logs. Porta ${port}.`);
 
+axios.post('http://localhost:10000/registrar', {
+  nome: 'logs',
+  eventosInteresse: ['LembreteCriado', 'LembreteClassificado', 'ObservacaoCriada', 'ObservacaoClassificada']
+});
+
   try {
     const resposta = await axios.get('http://localhost:10000/eventos');
-    resposta.data.forEach((evento) =>
-      registrarLog(evento.type, evento.payload)
-    );
+    const eventos = resposta.data;
+    for (const tipo in eventos) {
+      for (const evento of eventos[tipo]) {
+        registrarLog(evento.type, evento.payload);
+      }
+    }
     console.log('Eventos antigos levados para o log!');
   } catch (err) {
     console.log('Não foi possivel trazer eventos antigos para o log!');

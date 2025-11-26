@@ -1,81 +1,106 @@
-const axios = require('axios')
-const express = require('express')
-const app = express()
-app.use(express.json())
+const express = require('express');
+const axios = require('axios');
+const app = express();
 
-/*
-{
-  1: {
-    id: 1,
-    texto: "oi",
-    observacoes: [{id: 1000, texto: abc, lembreteId: 1}]
-  },
-  2: {
-    id: 2,
-    texto: "oi2",
-  }
-}
+app.use(express.json());
 
-[]
-*/
-const baseConsolidada = {}
+const lembretes = {};
 
 const funcoes = {
-  //a função deve receber um lembrete e cadastrá-lo na base consolidada
-  LembreteCriado: (lembrete) => {
-    baseConsolidada[lembrete.id] = lembrete
+  LembreteCriado: (payload) => {
+    const { id, texto } = payload;
+    lembretes[id] = { id, texto, observacoes: [], status: payload.status || 'comum' };
   },
-  // id, texto, lembreteId
-  ObservacaoCriada: (observacao) => {
-    const observacoes = baseConsolidada[observacao.lembreteId]['observacoes'] || []
-    observacoes.push(observacao)
-    baseConsolidada[observacao.lembreteId]['observacoes'] = observacoes
-  },
-  ObservacaoAtualizada: (observacao) => {
-    const observacoes = baseConsolidada[observacao.lembreteId]['observacoes']
-    const indice = observacoes.findIndex(o => o.id === observacao.id)
-    observacoes[indice] = observacao
-  },
-  LembreteClassificado: (lembrete) => {
-  baseConsolidada[lembrete.id] = lembrete
-}
-}
 
-//disponibiliza a base consolidada
-app.get('/lembretes', (req, res) => {
-  //devolver a base consolidada como um json
-  res.json(baseConsolidada)  
-})
-
-//recebe eventos, viabilizando a atualização da base
-app.post('/eventos', (req, res) => {
-  try{
-    //pegar o evento do corpo da requisição e fazer esse ponteiro apontar para ele
-    const evento = req.body
-    console.log(evento)
-    //desestruturar o evento, criando variaveis type e payload
-    // const type = evento.type
-    // const payload = evento.payload
-    const { type, payload } = evento
-    //acessar o mapa de funções na posição type e chamar a função resultante entregando a ela, como parametro, o payload
-    funcoes[type](payload)
-  }
-  catch(e){}
-  res.end()
-})
-
-const port = 6000
-app.listen(port, async () => {
-  console.log(`Consulta. Porta ${port}.`)
-  try {
-    const resp = await axios.get('http://localhost:10000/eventos')
-    for (let evento of resp.data) {
-      try {
-        funcoes[evento.type](evento.payload)
-      } catch(e){}
+  ObservacaoCriada: (payload) => {
+    const { id, texto, lembreteId, status } = payload;
+    const lembrete = lembretes[lembreteId];
+    if (lembrete) {
+      lembrete.observacoes.push({ id, texto, status });
     }
-  } catch(e) {
-    console.log('Erro ao recuperar eventos.', e.message)
-  }
-})
+  },
 
+  ObservacaoAtualizada: (payload) => {
+    const { id, texto, lembreteId, status } = payload;
+    const lembrete = lembretes[lembreteId];
+    if (lembrete) {
+      const obs = lembrete.observacoes.find((o) => o.id === id);
+      if (obs) {
+        obs.texto = texto;
+        obs.status = status;
+      }
+    }
+  },
+
+  ObservacaoClassificada: (payload) => {
+    const { id, status, lembreteId } = payload;
+    const lembrete = lembretes[lembreteId];
+    if (lembrete) {
+      const obs = lembrete.observacoes.find((o) => o.id === id);
+      if (obs) {
+        obs.status = status;
+      }
+    }
+  },
+
+  LembreteClassificado: (payload) => {
+    const { id, status, texto } = payload;
+    if (lembretes[id]) {
+      lembretes[id].status = status;
+      lembretes[id].texto = texto;
+    }
+  }
+};
+
+app.get('/lembretes', (req, res) => {
+  res.send(lembretes);
+});
+
+app.post('/eventos', (req, res) => {
+  try {
+    const { type, payload } = req.body;
+    if (funcoes[type]) {
+      funcoes[type](payload);
+    }
+  } catch (e) {
+    console.log(e.message);
+  }
+  res.status(200).send({ msg: 'Evento processado' });
+});
+
+const port = 6000;
+app.listen(port, () => {
+  console.log('Consulta. Porta ' + port);
+});
+
+(async () => {
+  try {
+    await axios.post('http://localhost:10000/registrar', {
+      nome: 'consulta',
+      eventosInteresse: [
+        'LembreteCriado',
+        'ObservacaoCriada',
+        'ObservacaoAtualizada',
+        'ObservacaoClassificada', 
+        'LembreteClassificado'     
+      ]
+    });
+
+    const resposta = await axios.get('http://localhost:10000/eventos');
+    const eventos = resposta.data;
+
+    for (const tipo in eventos) {
+      for (const evento of eventos[tipo]) {
+        try {
+          funcoes[evento.type](evento.payload);
+        } catch (e) {
+          console.log('Erro ao reprocesar evento:', e.message);
+        }
+      }
+    }
+
+    console.log('Eventos antigos processados com sucesso.');
+  } catch (err) {
+    console.log('Falha ao recuperar eventos antigos.');
+  }
+})();
