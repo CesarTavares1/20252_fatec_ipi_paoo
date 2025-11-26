@@ -1,58 +1,36 @@
-const axios = require('axios')
-const express = require('express')
-const { v4: uuidv4 } = require('uuid')
-const app = express()
-app.use(express.json())
+const express = require('express');
+const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
+const app = express();
+app.use(express.json());
 
-const observacoesPorLembrete = {}
-const funcoes = {
-  ObservacaoClassificada: (observacao) => {
-    const observacoes = observacoesPorLembrete[observacao.lembreteId]
-    const obsParaAtualizar = observacoes.find(o => o.id === observacao.id)
-    obsParaAtualizar.status = observacao.status
-    axios.post('http://localhost:10000/eventos', {
-      type: 'ObservacaoAtualizada',
-      payload: observacao
-    })
-  }
-}
+const observacoesPorLembrete = {};
+
 app.post('/lembretes/:id/observacoes', (req, res) => {
-  const idObs = uuidv4()
-  const { texto } = req.body
-  const { id: lembreteId } = req.params
-  const observacao = { id: idObs, texto, lembreteId, status: 'aguardando' }
-  const observacoesDoLembrete = observacoesPorLembrete[lembreteId] || []
-  observacoesDoLembrete.push(observacao)
-  observacoesPorLembrete[lembreteId] = observacoesDoLembrete
-  axios.post('http://localhost:10000/eventos', {
-    type: 'ObservacaoCriada',
-    payload: observacao
-  })
-  res.status(201).json(observacoesDoLembrete)
-})
-
-app.get('/lembretes/:id/observacoes', (req, res) => {
-  res.status(200).json(observacoesPorLembrete[req.params.id] || [])
-})
-
-app.post('/eventos', (req, res) => {
-  try{
-    const evento = req.body
-    console.log(evento)
-    funcoes[evento.type](evento.payload)
-  }
-  catch(e){
-  }
-  res.end()
-})
-
-const port = 5000
-app.listen(port, () => console.log(`Observações. Porta ${port}.`))
-
-axios.post('http://localhost:10000/registrar', {
-  nome: 'observacoes',
-  eventosInteresse: []
+  const { id: lembreteId } = req.params;
+  const observacao = { id: uuidv4(), texto: req.body.texto, lembreteId, status: 'aguardando' };
+  const obs = observacoesPorLembrete[lembreteId] = observacoesPorLembrete[lembreteId] || [];
+  obs.push(observacao);
+  axios.post('http://localhost:10000/eventos', { type: 'ObservacaoCriada', payload: observacao }).catch(() => {});
+  res.json(obs);
 });
 
+app.get('/lembretes/:id/observacoes', (req, res) => res.json(observacoesPorLembrete[req.params.id] || []));
 
+app.post('/eventos', (req, res) => {
+  const { type, payload } = req.body;
+  if (type === 'ObservacaoClassificada') {
+    const obs = observacoesPorLembrete[payload.lembreteId]?.find(o => o.id === payload.id);
+    if (obs) {
+      obs.status = payload.status;
+      axios.post('http://localhost:10000/eventos', { type: 'ObservacaoAtualizada', payload }).catch(() => {});
+    }
+  }
+  res.end();
+});
+
+app.listen(5000, () => {
+  console.log('Observações. Porta 5000');
+  axios.post('http://localhost:10000/registrar', { nome: 'observacoes', eventosInteresse: ['ObservacaoClassificada'] }).catch(() => {});
+});
 

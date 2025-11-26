@@ -5,73 +5,39 @@ app.use(express.json());
 
 const eventos = {};
 const interesses = {};
-
-const portas = {
-  lembretes: 4000,
-  observacoes: 5000,
-  consulta: 6000,
-  classificacao: 7000,
-  logs: 8000,
-  estatisticas: 9000
-};
+const portas = { lembretes: 4000, observacoes: 5000, consulta: 6000, classificacao: 7000, logs: 8000, estatisticas: 9000 };
 
 app.post('/registrar', async (req, res) => {
-  const { nome, eventosInteresse } = req.body || {};
+  const { nome, eventosInteresse = [] } = req.body;
+  interesses[nome] = eventosInteresse;
 
-  if (eventosInteresse) {
-    interesses[nome] = eventosInteresse;
-  } else {
-    interesses[nome] = [];
-  }
-
-  console.log(`Microsserviço '${nome}' registrado com interesse em:`, interesses[nome]);
-
-  for (const tipo of interesses[nome]) {
+  for (const tipo of eventosInteresse) {
     if (eventos[tipo]) {
       for (const ev of eventos[tipo]) {
-        const targetPort = portas[nome];
-        if (!targetPort) {
-          console.warn(`Porta desconhecida para microsserviço '${nome}', pulando envio de eventos antigos.`);
-          continue;
-        }
-        axios.post(`http://localhost:${targetPort}/eventos`, ev).catch((err) => {
-          console.log(`Falha ao enviar evento antigo para ${nome} na porta ${targetPort}:`, err.message);
-        });
+        axios.post(`http://localhost:${portas[nome]}/eventos`, ev).catch(() => {});
       }
     }
   }
 
-  res.status(200).send({ status: 'Interesses registrados com sucesso' });
+  res.json({ ok: true });
 });
 
 app.post('/eventos', async (req, res) => {
   const evento = req.body;
-  console.log('\nEvento recebido no barramento:', evento);
-
   if (!eventos[evento.type]) {
     eventos[evento.type] = [];
   }
   eventos[evento.type].push(evento);
 
-  for (let nome in interesses) {
-    if (interesses[nome].includes(evento.type)) {
-      try {
-        await axios.post(`http://localhost:${portas[nome]}/eventos`, evento);
-        console.log(`Evento enviado para: ${nome}`);
-      } catch (e) {
-        console.log(`Falha ao enviar evento para ${nome}`);
-      }
+  for (const [nome, types] of Object.entries(interesses)) {
+    if (types.includes(evento.type)) {
+      axios.post(`http://localhost:${portas[nome]}/eventos`, evento).catch(() => {});
     }
   }
 
   res.end();
 });
 
-app.get('/eventos', (req, res) => {
-  res.json(eventos);
-});
+app.get('/eventos', (req, res) => res.json(eventos));
 
-const port = 10000;
-app.listen(port, () => {
-  console.log(`Barramento de eventos. Porta ${port}.`);
-});
+app.listen(10000, () => console.log('Barramento. Porta 10000'));

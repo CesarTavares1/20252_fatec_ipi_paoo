@@ -7,45 +7,28 @@ app.use(express.json());
 
 const logs = [];
 
-function registrarLog(type, payload) {
-  logs.push({
-    id: uuidv4(),
-    timestamp: new Date().toISOString(),
-    type,
-    payload,
-  });
-}
-
 app.post('/eventos', (req, res) => {
   const { type, payload } = req.body;
-  registrarLog(type, payload);
-  res.status(200).send({ msg: 'Log registrado' });
+  logs.push({ id: uuidv4(), timestamp: new Date().toISOString(), type, payload });
+  res.json({ ok: true });
 });
 
-app.get('/logs', (req, res) => {
-  res.json(logs);
-});
+app.get('/logs', (req, res) => res.json(logs));
 
-const port = 8000;
-app.listen(port, async () => {
-  console.log(`Logs. Porta ${port}.`);
+app.listen(8000, async () => {
+  console.log('Logs. Porta 8000');
 
-axios.post('http://localhost:10000/registrar', {
-  nome: 'logs',
-  eventosInteresse: ['LembreteCriado', 'LembreteClassificado', 'ObservacaoCriada', 'ObservacaoClassificada']
-});
+  await axios.post('http://localhost:10000/registrar', {
+    nome: 'logs',
+    eventosInteresse: ['LembreteCriado', 'LembreteClassificado', 'ObservacaoCriada', 'ObservacaoClassificada', 'ObservacaoAtualizada']
+  }).catch(() => {});
 
   try {
-    const resposta = await axios.get('http://localhost:10000/eventos');
-    const eventos = resposta.data;
+    const { data: eventos } = await axios.get('http://localhost:10000/eventos');
     for (const tipo in eventos) {
       for (const evento of eventos[tipo]) {
-        registrarLog(evento.type, evento.payload);
+        logs.push({ id: uuidv4(), timestamp: new Date().toISOString(), type: evento.type, payload: evento.payload });
       }
     }
-    console.log('Eventos antigos levados para o log!');
-  } catch (err) {
-    console.log('Não foi possivel trazer eventos antigos para o log!');
-  }
+  } catch (err) {}
 });
-

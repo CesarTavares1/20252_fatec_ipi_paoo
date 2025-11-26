@@ -4,7 +4,7 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-const estatisticas = {
+const stats = {
   totalLembretes: 0,
   lembretesComuns: 0,
   lembretesImportantes: 0,
@@ -12,61 +12,41 @@ const estatisticas = {
   mediaCaracteresObservacao: 0,
 };
 
-let somaCaracteresObservacoes = 0;
+let somaCaracteres = 0;
 
-function processarEvento(type, payload) {
-  if (type === 'LembreteCriado') {
-    estatisticas.totalLembretes++;
-  }
-
+const processar = (type, payload) => {
+  if (type === 'LembreteCriado') stats.totalLembretes++;
   if (type === 'LembreteClassificado') {
-    if (payload.status === 'importante') {
-      estatisticas.lembretesImportantes++;
-    } else {
-      estatisticas.lembretesComuns++;
-    }
+    payload.status === 'importante' ? stats.lembretesImportantes++ : stats.lembretesComuns++;
   }
-
   if (type === 'ObservacaoCriada') {
-    estatisticas.totalObservacoes++;
-
-    const tamanho = payload.texto.length;
-    somaCaracteresObservacoes += tamanho;
-    estatisticas.mediaCaracteresObservacao =
-      somaCaracteresObservacoes / estatisticas.totalObservacoes;
+    stats.totalObservacoes++;
+    somaCaracteres += payload.texto.length;
+    stats.mediaCaracteresObservacao = somaCaracteres / stats.totalObservacoes;
   }
-}
+};
 
 app.post('/eventos', (req, res) => {
-  const { type, payload } = req.body;
-  processarEvento(type, payload);
-  res.status(200).send({ msg: 'Evento processado' });
+  processar(req.body.type, req.body.payload);
+  res.json({ ok: true });
 });
 
-app.get('/estatistica', (req, res) => {
-  res.json(estatisticas);
-});
+app.get('/estatistica', (req, res) => res.json(stats));
 
-const port = 9000;
-app.listen(port, async () => {
-  console.log(`Estatísticas. Porta ${port}.`);
+app.listen(9000, async () => {
+  console.log('Estatísticas. Porta 9000');
+
+  await axios.post('http://localhost:10000/registrar', {
+    nome: 'estatisticas',
+    eventosInteresse: ['LembreteCriado', 'LembreteClassificado', 'ObservacaoCriada']
+  }).catch(() => {});
 
   try {
-    const resposta = await axios.get('http://localhost:10000/eventos');
-    const eventos = resposta.data;
+    const { data: eventos } = await axios.get('http://localhost:10000/eventos');
     for (const tipo in eventos) {
       for (const evento of eventos[tipo]) {
-        processarEvento(evento.type, evento.payload);
+        processar(evento.type, evento.payload);
       }
     }
-    console.log('Eventos recuperados com sucesso!');
-  } catch (err) {
-    console.log('Não foi possível recuperar eventos antigos.');
-  }
+  } catch (err) {}
 });
-
-axios.post('http://localhost:10000/registrar', {
-  nome: 'estatisticas',
-  eventosInteresse: ['LembreteCriado', 'LembreteClassificado', 'ObservacaoCriada']
-});
-

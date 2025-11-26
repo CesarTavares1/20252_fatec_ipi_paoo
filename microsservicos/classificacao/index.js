@@ -4,60 +4,48 @@ import axios from 'axios';
 const app = express();
 app.use(express.json());
 
-const palavraChave = 'importante';
-
-const funcoes = {
-  ObservacaoCriada: async (observacao) => {
-    const textoLower = observacao.texto.toLowerCase();
-
-    if (textoLower.includes(palavraChave)) {
-      observacao.status = 'importante';
-    } else {
-      observacao.status = 'comum';
-    }
-
+const handlers = {
+  ObservacaoCriada: async ({ id, texto, lembreteId, status }) => {
+    const novoStatus = texto.toLowerCase().includes('importante') ? 'importante' : 'comum';
     await axios.post('http://localhost:10000/eventos', {
       type: 'ObservacaoClassificada',
-      payload: observacao
+      payload: { id, texto, lembreteId, status: novoStatus }
     }).catch(() => {});
   },
 
-  LembreteCriado: async (lembrete) => {
-    if (lembrete.texto.length >= 50) {
-      lembrete.status = 'importante';
-    } else {
-      lembrete.status = 'comum';
-    }
-
+  LembreteCriado: async ({ id, texto }) => {
+    const novoStatus = texto.length >= 50 ? 'importante' : 'comum';
     await axios.post('http://localhost:10000/eventos', {
       type: 'LembreteClassificado',
-      payload: lembrete
+      payload: { id, texto, status: novoStatus }
     }).catch(() => {});
   }
 };
 
 app.post('/eventos', async (req, res) => {
-  const evento = req.body;
-  console.log('Evento recebido na Classificação:', evento);
-
-  try {
-    const funcao = funcoes[evento.type];
-    if (funcao) {
-      await funcao(evento.payload);
-    }
-  } catch (e) {
-    console.log('Erro ao processar evento:', e.message);
+  const { type, payload } = req.body;
+  if (handlers[type]) {
+    await handlers[type](payload);
   }
-
   res.end();
 });
 
-const port = 7000;
-app.listen(port, async () => {
-  console.log(`Classificação. Porta ${port}.`);
+app.listen(7000, async () => {
+  console.log('Classificação. Porta 7000');
 
   await axios.post('http://localhost:10000/registrar', {
     nome: 'classificacao',
     eventosInteresse: ['ObservacaoCriada', 'LembreteCriado']
   }).catch(() => {});
+
+  try {
+    const { data: eventos } = await axios.get('http://localhost:10000/eventos');
+    for (const tipo in eventos) {
+      for (const evento of eventos[tipo]) {
+        if (handlers[evento.type]) {
+          await handlers[evento.type](evento.payload);
+        }
+      }
+    }
+  } catch (err) {}
 });
